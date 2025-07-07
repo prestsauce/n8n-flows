@@ -1,0 +1,449 @@
+{
+  "name": "Obisidan-Links",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "triggerAtMinute": 5
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -340,
+        -80
+      ],
+      "id": "f970fbaf-6b91-4a0e-886e-e596a436ecec",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the timestamp from the previous node's output\nconst nowMsUTC = Date.parse($input.first().json.timestamp);\nconst now = new Date(nowMsUTC);\n\n// Calculate 30 minutes ago based on this 'now' date object\nconst thirtyMinutesAgoMs = now.getTime() - (30 * 60 * 1000);\nconst thirtyMinutesAgoDate = new Date(thirtyMinutesAgoMs);\n\nconst yearAgo = thirtyMinutesAgoDate.getFullYear();\nconst monthAgo = (thirtyMinutesAgoDate.getMonth() + 1).toString().padStart(2, '0');\nconst dayAgo = thirtyMinutesAgoDate.getDate().toString().padStart(2, '0');\nconst hoursAgo = thirtyMinutesAgoDate.getHours().toString().padStart(2, '0');\nconst minutesAgo = thirtyMinutesAgoDate.getMinutes().toString().padStart(2, '0');\nconst secondsAgo = thirtyMinutesAgoDate.getSeconds().toString().padStart(2, '0');\n\nconst earliestTimestamp = `${yearAgo}-${monthAgo}-${dayAgo}T${hoursAgo}:${minutesAgo}:${secondsAgo}`;\n\n// Get current year for the path from the 'now' date object\nconst yearPath = now.getFullYear();\n\n// Get current month number and name for the path from the 'now' date object\nconst monthNumberPath = (now.getMonth() + 1).toString().padStart(2, '0'); // getMonth() is 0-indexed\nconst monthNames = [\n  'January', 'February', 'March', 'April', 'May', 'June',\n  'July', 'August', 'September', 'October', 'November', 'December'\n];\nconst monthNamePath = monthNames[now.getMonth()];\n\n// Construct the base path for the current month's daily notes\nconst currentMonthPath = `${yearPath}/${monthNumberPath}-${monthNamePath}`;\n\n// Return the values as an array of objects, as expected by n8n\nreturn [\n  {\n    json: {\n      currentMonthPath: currentMonthPath,\n      earliestTimestamp: earliestTimestamp,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -100,
+        -80
+      ],
+      "id": "97e02146-b698-491d-beef-d6bb6a9d2459",
+      "name": "Get Date Parameters"
+    },
+    {
+      "parameters": {
+        "content": "## Notes Organization\n\nMy obsidian notes are structured chronologically.\n\nThis node returns the correct substring such that the rest of the flow only looks at the current month.\n\nThis node also returns a timestamp that indicates the earliest to filter for (now() - 30 minutes)",
+        "height": 240,
+        "width": 360
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -100,
+        -420
+      ],
+      "id": "19a6e949-d172-4004-8cbf-9110ae184ecf",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "command": "=find {local_path}/{{ $json.currentMonthPath }}/ -type f -mmin -30"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        120,
+        -80
+      ],
+      "id": "88038bb6-61c3-4b18-8b64-f6cff8ffd189",
+      "name": "Get Modified Files"
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json.stdout;\n\n// Split by newline and filter out any empty lines\nconst filePaths = output\n  .split('\\n')\n  .map(path => path.trim())\n  .filter(path => path.length > 0);\n\n// Return each as a separate item\nreturn filePaths.map(path => ({\n  json: { filePath: path }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        -80
+      ],
+      "id": "af3b5157-1648-4ac2-98f9-cdee16d03cf8",
+      "name": "Parse File Paths"
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.filePath }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        560,
+        -80
+      ],
+      "id": "5479d544-e0a2-439a-a494-fdabf0a4f824",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        800,
+        -80
+      ],
+      "id": "c842b38a-6403-4bae-9fd1-05b538c9e279",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst urls = [];\n\nfor (const item of items) {\n  const content = item.json.data;\n  const matches = [...content.matchAll(/\\[.*?\\]\\((https?:\\/\\/[^\\s)]+)\\)|\\bhttps?:\\/\\/[^\\s)]+/g)];\n  const extracted = matches.map(m => m[1] || m[0]);\n  urls.push(...extracted);\n}\n\nconst uniqueUrls = [...new Set(urls)];\n\nreturn uniqueUrls.map(url => ({ json: { url } }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        -80
+      ],
+      "id": "4af0c8a9-04fc-4e12-891c-21169f17a873",
+      "name": "Extract External Links",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "5b4d3434-2ef7-4cac-a085-f8e73c85cf0b",
+              "leftValue": "={{ $json.url }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1240,
+        -80
+      ],
+      "id": "bf8dde12-2ee8-4932-8366-2b31aa2beb3e",
+      "name": "If there are links in the document"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1460,
+        60
+      ],
+      "id": "22e2cf1d-ef42-459a-a0b7-a44cd22d6aaa",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "url": "http://{karakeep_url}/api/v1/bookmarks/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.url }}"
+            },
+            {
+              "name": "includeContent",
+              "value": "false"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {api_key}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1460,
+        -220
+      ],
+      "id": "ce3b5ff2-6449-49b8-9f8e-d66b458bc7e6",
+      "name": "Karakeep Find",
+      "executeOnce": false,
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1720,
+        -100
+      ],
+      "id": "6d28feb9-549a-4dc2-9f67-c7fd13151f77",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "efddc207-cb6d-4573-8347-05fced54391b",
+              "leftValue": "={{ $json.bookmarks[0].content.url }}",
+              "rightValue": "={{ $json.url }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1940,
+        -100
+      ],
+      "id": "608f3a14-7680-4e0e-bb8e-5daafe1da2fa",
+      "name": "If"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2180,
+        60
+      ],
+      "id": "5461ad33-11a9-4cbb-9561-478f368cf42a",
+      "name": "No Operation, do nothing1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://{karakeep_url}/api/v1/bookmarks",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {api_key}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json.url }}\",\n  \"type\": \"link\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2180,
+        -200
+      ],
+      "id": "42f729ce-93cb-4e3a-a53b-fb24de7c2fce",
+      "name": "Karakeep Post",
+      "executeOnce": false,
+      "alwaysOutputData": false
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Date Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Date Parameters": {
+      "main": [
+        [
+          {
+            "node": "Get Modified Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Modified Files": {
+      "main": [
+        [
+          {
+            "node": "Parse File Paths",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse File Paths": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Extract External Links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract External Links": {
+      "main": [
+        [
+          {
+            "node": "If there are links in the document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If there are links in the document": {
+      "main": [
+        [
+          {
+            "node": "Karakeep Find",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Karakeep Find": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Karakeep Post",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Operation, do nothing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c5d78f87-b015-49d7-9ec7-054456cfb80e",
+  "meta": {
+    "instanceId": "49e91e508d5ab3307d38ee5e40fce8f6b0d3b70a8244871d197ab0d33fbbf822"
+  },
+  "id": "u4fqSAS6YtLoGaEi",
+  "tags": []
+}
